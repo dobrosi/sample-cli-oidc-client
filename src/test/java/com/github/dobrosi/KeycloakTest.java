@@ -1,7 +1,6 @@
 package com.github.dobrosi;
 
 public class KeycloakTest {
-
     private static final String AUTHORITY = "http://localhost:8080/realms/microsec";
     private static final String CLIENT_ID = "test-cli-app";
     private static final String REDIRECT_URI = "http://localhost:8888/callback";

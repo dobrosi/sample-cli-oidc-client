@@ -10,4 +10,5 @@ public record OpenidConfiguration (
 
         @JsonProperty("token_endpoint")
         String tokenEndpoint
-) {}
+) {
+}

@@ -15,17 +15,18 @@ public record TokenResponse(
         String tokenType,
 
         @JsonProperty("expires_in")
-        long expiresIn,
+        Long expiresIn,
 
         @JsonProperty("ext_expires_in")
-        long extExpiresIn,
+        Long extExpiresIn,
 
         @JsonProperty("refresh_token")
         String refreshToken,
 
         @JsonProperty("refresh_expires_in")
-        long refreshExpiresIn,
+        Long refreshExpiresIn,
 
         @JsonProperty("scope")
         String scope
-) {}
+) {
+}

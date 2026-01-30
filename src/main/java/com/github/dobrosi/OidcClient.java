@@ -15,7 +15,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import okhttp3.FormBody;
@@ -24,10 +23,14 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+import static com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT;
+
 public class OidcClient {
     private final OkHttpClient client;
     private final ObjectMapper objectMapper;
     private final MessageDigest messageDigest;
+    private final SecureRandom secureRandom;
     private final String authority;
     private final String clientId;
     private final URI redirectUri;
@@ -39,14 +42,17 @@ public class OidcClient {
         this.clientId = clientId;
         this.redirectUri = URI.create(redirectUri);
         this.scope = scope;
+
         client = new OkHttpClient();
         objectMapper = new ObjectMapper();
-        objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
+        objectMapper.setDefaultPropertyInclusion(NON_NULL);
+        objectMapper.enable(INDENT_OUTPUT);
         try {
             messageDigest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
         }
+        secureRandom = new SecureRandom();
         getEndpoints();
     }
 
@@ -61,15 +67,14 @@ public class OidcClient {
 
     private void getEndpoints() {
         try (
-                Response response = client.newCall(new Request.Builder()
-                                                           .url(authority + "/.well-known/openid-configuration")
-                                                           .get()
-                                                           .build())
+                Response response = client.newCall(
+                                new Request.Builder()
+                                        .url(authority + "/.well-known/openid-configuration")
+                                        .get()
+                                        .build())
                         .execute()) {
             if (!response.isSuccessful()) {
-                throw new RuntimeException(
-                        "OIDC discovery failed, HTTP " + response.code()
-                );
+                throw new RuntimeException("OIDC discovery failed, HTTP " + response.code());
             }
             ResponseBody body = response.body();
             if (body == null) {
@@ -83,7 +88,7 @@ public class OidcClient {
 
     private String generateCodeVerifier() {
         byte[] random = new byte[32];
-        new SecureRandom().nextBytes(random);
+        secureRandom.nextBytes(random);
         return Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(random);
@@ -109,8 +114,10 @@ public class OidcClient {
                         resultHolder[0] = exchangeCodeForToken(codeVerifier, extractCode(query));
                         String response = objectMapper.writeValueAsString(resultHolder[0]);
                         exchange.sendResponseHeaders(200, response.length());
-                        exchange.getResponseBody().write(response.getBytes());
-                        exchange.getResponseBody().close();
+                        exchange.getResponseBody()
+                                .write(response.getBytes());
+                        exchange.getResponseBody()
+                                .close();
                         latch.countDown();
                     } else if (query != null && query.contains("error=")) {
                         String response = "Error during authorization: " + query;
@@ -150,18 +157,19 @@ public class OidcClient {
 
     private TokenResponse exchangeCodeForToken(String codeVerifier, final String authorizationCode) throws IOException {
         try (
-                Response response = client.newCall(new Request.Builder()
-                                                           .url(openidConfiguration.tokenEndpoint())
-                                                           .post(new FormBody.Builder()
-                                                                         .add("client_id", clientId)
-                                                                         .add("grant_type", "authorization_code")
-                                                                         .add("code", authorizationCode)
-                                                                         .add("redirect_uri", redirectUri.toString())
-                                                                         .add("scope", scope)
-                                                                         .add("code_verifier", codeVerifier)
-                                                                         .build())
-                                                           .header("Accept", "application/json")
-                                                           .build())
+                Response response = client.newCall(
+                                new Request.Builder()
+                                        .url(openidConfiguration.tokenEndpoint())
+                                        .post(new FormBody.Builder()
+                                                      .add("client_id", clientId)
+                                                      .add("grant_type", "authorization_code")
+                                                      .add("code", authorizationCode)
+                                                      .add("redirect_uri", redirectUri.toString())
+                                                      .add("scope", scope)
+                                                      .add("code_verifier", codeVerifier)
+                                                      .build())
+                                        .header("Accept", "application/json")
+                                        .build())
                         .execute()) {
             if (!response.isSuccessful()) {
                 throw new RuntimeException("Token request failed: " + response);
